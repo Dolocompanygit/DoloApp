@@ -1,10 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'orderList.dart';
 
 class CreateOrderPage extends StatefulWidget {
-  const CreateOrderPage({Key? key}) : super(key: key);
+  const CreateOrderPage({super.key});
 
   @override
   State<CreateOrderPage> createState() => _CreateOrderPageState();
@@ -19,12 +20,14 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
   final TextEditingController dateController = TextEditingController();
 
   // Sender-specific controllers
-  final TextEditingController itemDescriptionController = TextEditingController();
+  final TextEditingController itemDescriptionController =
+      TextEditingController();
   final TextEditingController weightController = TextEditingController();
 
   // Traveller-specific controllers
   final TextEditingController vehicleInfoController = TextEditingController();
-  final TextEditingController availableSpaceController = TextEditingController();
+  final TextEditingController availableSpaceController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -74,14 +77,18 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
                               'Sender',
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: isSender ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isSender
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                                 color: isSender ? Colors.black : Colors.grey,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Container(
                               height: 2,
-                              color: isSender ? Colors.indigo[900] : Colors.transparent,
+                              color: isSender
+                                  ? Colors.indigo[900]
+                                  : Colors.transparent,
                             ),
                           ],
                         ),
@@ -102,14 +109,18 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
                               'Traveller',
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: !isSender ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: !isSender
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                                 color: !isSender ? Colors.black : Colors.grey,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Container(
                               height: 2,
-                              color: !isSender ? Colors.indigo[900] : Colors.transparent,
+                              color: !isSender
+                                  ? Colors.indigo[900]
+                                  : Colors.transparent,
                             ),
                           ],
                         ),
@@ -156,7 +167,9 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
                   controller: dateController,
                   icon: Icons.calendar_today,
                   title: isSender ? 'Select Date' : 'Select Date and time',
-                  hint: isSender ? 'Enter Date of pickup' : 'Enter Date and time of pickup',
+                  hint: isSender
+                      ? 'Enter Date of pickup'
+                      : 'Enter Date and time of pickup',
                   onTap: () => _selectDate(context),
                 ),
                 const SizedBox(height: 12),
@@ -289,7 +302,7 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
         if (pickedTime != null) {
           setState(() {
             dateController.text =
-            '${picked.day}/${picked.month}/${picked.year} ${pickedTime.format(context)}';
+                '${picked.day}/${picked.month}/${picked.year} ${pickedTime.format(context)}';
           });
         }
       } else {
@@ -301,7 +314,8 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
   }
 
   // Place order logic
-  void _placeOrder() {
+
+  void _placeOrder() async {
     // Validate fields
     if (pickupController.text.isEmpty ||
         dropoffController.text.isEmpty ||
@@ -315,9 +329,18 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
       return;
     }
 
+    // Prepare order data
+    Map<String, dynamic> orderData = {
+      'pickup': pickupController.text,
+      'dropoff': dropoffController.text,
+      'date': dateController.text,
+      'isSender': isSender,
+    };
+
     if (isSender) {
-      // Validate sender-specific fields
-      if (itemDescriptionController.text.isEmpty || weightController.text.isEmpty) {
+      // Sender-specific fields
+      if (itemDescriptionController.text.isEmpty ||
+          weightController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please fill item description and weight'),
@@ -327,20 +350,12 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
         return;
       }
 
-      // Navigate to Order List Screen when validation passes
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => OrderListScreen(
-            // pickup: pickupController.text,
-            // dropoff: dropoffController.text,
-            // date: dateController.text,
-          ),
-        ),
-      );
+      orderData['itemDescription'] = itemDescriptionController.text;
+      orderData['weight'] = weightController.text;
     } else {
-      // Validate traveller-specific fields
-      if (vehicleInfoController.text.isEmpty || availableSpaceController.text.isEmpty) {
+      // Traveller-specific fields
+      if (vehicleInfoController.text.isEmpty ||
+          availableSpaceController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please fill vehicle info and available space'),
@@ -350,20 +365,45 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
         return;
       }
 
-      // Show success message for traveller (different flow)
+      orderData['vehicleInfo'] = vehicleInfoController.text;
+      orderData['availableSpace'] = availableSpaceController.text;
+    }
+
+    try {
+      // Save order to Firestore
+      await FirebaseFirestore.instance.collection('orders').add(orderData);
+
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Traveller trip posted successfully!'),
+          content: Text('Order created successfully!'),
           backgroundColor: Colors.green,
         ),
       );
 
-      // Clear all fields
+      // Clear all fields after saving
       pickupController.clear();
       dropoffController.clear();
       dateController.clear();
+      itemDescriptionController.clear();
+      weightController.clear();
       vehicleInfoController.clear();
       availableSpaceController.clear();
+
+      // Navigate to Order List Screen (optional)
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OrderListScreen(),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error creating order: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }
